@@ -105,7 +105,7 @@ E:\claudeCoding\
 
 ## 基于文档的评分规则
 
-以 PDF 数据需求文档为事实来源，特别关注以下可见章节：
+以「数据需求文档 Level 1」为事实来源，严格遵循以下章节的约束：
 
 - 4.2.3 rubrics 人工评分
 - 4.2.3.1 文件格式
@@ -115,26 +115,48 @@ E:\claudeCoding\
 - 4.2.5 命中 Qwen BadPattern
 - 5.3 Explicit（显式）vs Implicit（隐式）定义
 
-仅使用可追溯到上述章节或其示例的、有文档依据的规则。不要引入自行编造的评分理论，不要将内部惯例说成是文档措辞。
+仅使用可追溯到上述章节或其示例的、有文档依据的规则。不要引入自行编造的评分理论。
+
+### 命名关联链
+
+根据文档要求，`criterion.name` 要和 prompt/query 相关 → `criterion.description` 要和 `criterion.name` 相关 → `criterion.rationale` 要和 `criterion.description` 相关。四个层级必须形成可追溯的语义链条。
+
+### description 格式规范
+
+每个 `criterion.description` 必须遵循以下格式：
+
+1. **首句**为 rubric 问题（必填），描述该 criterion 评判什么
+2. 紧跟 **`1:锚点;2:锚点;3:锚点;4:锚点;5:锚点`**，五级评分差距明显，读者无需额外假设即可分辨 1 分 vs 3 分 vs 4 分的区别
+3. 可使用 `[Explicit]` 或 `[Implicit]` 标签前缀区分 prompt 中显式/隐式要求的维度
+
+### rationale 规范
+
+- 必须**紧扣所选的 score**，与 description 中对应锚点高度相关
+- 必须**具体到文件或类名、方法名**，指出哪里没有实现好或哪里实现到位
+- **禁止**将原始错误信息、堆栈跟踪直接粘贴到 rationale 中
+- rationale 是对当前运行的独立评估，不要出现 `qwen` 或 `opus` 模型名
+
+### badpattern 字段
+
+qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
+
+- 字段名：`badpattern`（顶层字段，字符串类型）
+- 如命中，填写对应的 bad pattern 名称（如 `task_abandonment`）
+- 如未命中，可省略该字段
+- opus 变体不需要此字段
 
 硬性要求：
 
 - 输出文件为 `quality.toml`
 - rubric 数量保持在 **5 到 15** 之间
-- 同一任务的 qwen 和 claude 使用**一套共享的 rubric**
-- 每个 `criterion.name` 要和提示词prompt.txt相关
-- 每个 `criterion.description` 与其 `criterion.name`相关
-- 每个 `criterion.description` 是具体的评分 rubric，而非含糊的文字,且要列出1 2 3 4 5个评分标准，且评分差距明显
+- 同一任务的 qwen 和 claude 使用**一套共享的 rubric**：`[[criterion]]` 数量相同、`description` 逐字相同、`type`/`points`/`weight` 完全一致
 - 每个 `criterion.type` 保持 `"likert"`
 - 每个 `criterion.points` 保持 `5`
 - 每个 `criterion.weight` 保持 `1.0`
-- 每个 `criterion.score` 是对该运行的实际专家评分
-- 每个 `criterion.rationale` 给出评分证据，要紧扣所选择的score，且rationale 要和description相关，相关度高；需要根据description中的评分标准，具体指出哪里没有实现好，需要具体到文件或者类名，方法名
 - passrate 计算方式为：加权得分之和除以加权满分之和
 - passrate 交付目标为 `qwen < 0.7`，`opus > qwen`，且 `(opus - qwen) / qwen > 20%`
-- 在设置score的时候，qwen模型的最终passrate一定要小于0.7，opus模型的最终passrate一定要大于qwen模型的最终passrate，且opus模型的最终passrate与qwen模型的最终passrate的差值要大于20%，这是必须要满足的条件
-- `task_type` / `application_domain` / `programming_language` 是单选元数据字段，应按文档枚举意图一致填写
-- 如果运行命中 Qwen bad pattern，则填写相应的 bad pattern 字段
+- 在设置 score 时，必须确保最终 qwen passrate < 0.7，opus passrate > qwen passrate，且相对 gap > 20%
+- `task_type` / `application_domain` / `programming_language` 是单选元数据字段
 
 ## Rubric 编写规则
 
@@ -143,19 +165,20 @@ E:\claudeCoding\
 这意味着你必须：
 
 - 仔细阅读 prompt，识别任务真正测试的是什么
+- 确保 `criterion.name` 和 prompt 任务相关，`criterion.description` 和 `criterion.name` 相关，`criterion.rationale` 和 `criterion.description` 相关——形成不可断裂的命名关联链
 - 将这些任务压力转化为 criterion name 和 criterion description
 - 让 rubric 语言反映该仓库任务的具体链路、边界、回归风险或交付风险
 - 保持 rubric 足够具体，使其明确属于此任务而非通用评分卡
 - 仅在同一任务的 qwen vs claude 配对中复用完全相同的 rubric 集
 
-根据文档示例，`criterion.description` 应该像一个真正的、有锚点的 1–5 级评分标准，例如：
+根据文档示例，`criterion.description` 必须是一个有锚点的 1–5 级评分标准，遵循固定格式：
 
-- criterion 以被评判的具体问题开头
-- 正文给出 1、2、3、4、5 分的明确锚点
-- 分数越高，锚点越完整、正确、稳健
+- **首句**：以被评判的具体问题开头（必填的 rubric 问题），可带 `[Explicit]` 或 `[Implicit]` 标签前缀
+- **正文**：紧跟 `1:锚点描述;2:锚点描述;3:锚点描述;4:锚点描述;5:锚点描述;`，五个级别评分差距明显
+- 分数越高，锚点越完整、正确、稳健；读者无需额外假设即可分辨 1 分 vs 3 分 vs 4 分的区别
 - 分数随后在 `criterion.rationale` 中用代码和执行证据进行论证
 
-可以使用 `[Explicit]` 和 `[Implicit]` 标签，因为文档示例中使用了它们。将它们视为 rubric 标签，而非强制配额。在它们有助于清晰描述 criterion 时使用。
+`[Explicit]` 和 `[Implicit]` 标签用于区分 prompt 中显式/隐式要求的维度。在它们有助于清晰描述 criterion 时使用。
 
 此工作流的内部 rubric 质量检查：
 
@@ -239,6 +262,17 @@ E:\claudeCoding\
 6. 不要将配对中不同的 rationale 内容或不同的锚点本身视为缺陷；当观察到的行为不同时，配对运行可以合理地落在不同的锚点上，只要应用的是相同的 rubric 和相同的评分逻辑
 7. 检查最终配对是否满足交付目标
 8. 如果不满足，仅在证据范围内重新审视 rubric 的锐度和分数校准
+
+### 双模型对齐强制检查
+
+在写入两个 quality.toml 之前，必须逐项确认：
+
+- qwen 和 claude 的 `[[criterion]]` **数量相同**
+- 每个 criterion 的 `name` 在两份文件中**完全一致**
+- 每个 criterion 的 `description` 在两份文件中**逐字相同**
+- 每个 criterion 的 `type`、`points`、`weight` 在两份文件中**完全一致**
+- 仅 `score` 和 `rationale` 可以（且通常应该）不同
+- qwen 变体必须包含 `badpattern` 字段（如果适用），opus 变体不需要
 
 
 
@@ -348,7 +382,7 @@ E:\claudeCoding\
 
 ## quality.toml 格式
 
-使用以下结构：
+使用以下结构（注意 qwen 变体需包含 `badpattern` 字段）：
 
 ```toml
 version = 1
@@ -360,6 +394,7 @@ task_type = "缺陷修复"
 application_domain = "企业协作后端"
 programming_language = "Java"
 passrate = 0.64
+badpattern = "task_abandonment"
 summary = "一段简洁的、基于证据的摘要段落。"
 
 [[criterion]]
@@ -369,7 +404,7 @@ type = "likert"
 points = 5
 weight = 1.0
 score = 3
-rationale = "用实现和观察到的验证中的直接证据解释分数。"
+rationale = "用实现和观察到的验证中的直接证据解释分数。必须具体到文件或类名、方法名。"
 
 [[criterion]]
 name = "implementation_correctness"
@@ -378,7 +413,7 @@ type = "likert"
 points = 5
 weight = 1.0
 score = 4
-rationale = "说明已确认的优势和任何未解决的正确性风险。"
+rationale = "说明已确认的优势和任何未解决的正确性风险。必须具体到文件或类名、方法名。"
 ```
 
 ## quality.toml 规则
@@ -389,12 +424,16 @@ rationale = "说明已确认的优势和任何未解决的正确性风险。"
 - 将 `score` 值保持在 **1–5** likert 量表上
 - 每个 criterion 保持 `weight = 1.0`
 - 每个 criterion 保持 `points = 5`
-- 使用文档公式计算 `passrate`
-- 为同一任务的配对 qwen 和 claude 运行保持一套共享的 rubric
-- 确保 `criterion.name` 与 `criterion.description` 对应
-- 确保 `criterion.rationale` 引用真实证据
+- 使用文档公式计算 `passrate`：`(∑weight × score) / (∑weight × points)`
+- 为同一任务的配对 qwen 和 claude 运行保持一套共享的 rubric：
+  - `[[criterion]]` 数量相同
+  - 每个 `description` 逐字相同
+  - `type`、`points`、`weight` 完全一致
+- 确保 `criterion.name` → `criterion.description` → `criterion.rationale` 形成可追溯的语义关联链
+- 确保 `criterion.description` 首句为 rubric 问题，紧跟 `1:锚点;2:锚点;3:锚点;4:锚点;5:锚点`
+- 确保 `criterion.rationale` 引用真实证据，具体到文件、类名或方法名，禁止粘贴原始错误信息
+- qwen 变体必须分析并填写 `badpattern` 字段（如适用），opus 变体不需要
 - 填写 `task_type`、`application_domain` 和 `programming_language`
-- 当证据表明适用时，添加 bad-pattern 信息
 
 工作区和交付规则：
 
@@ -402,7 +441,7 @@ rationale = "说明已确认的优势和任何未解决的正确性风险。"
 - 不要在 rationale 文本中提及原始产物文件名，如 `patch.diff`、`trajectory.jsonl`、`session.json` 或 `proxy_events.jsonl`
 - 不要在 rationale 文本中放置 `file:///...` 链接或原始绝对路径
 - 不要在 rationale 文本中提及 qwen 或 opus 名称；将 rationale 写为对当前运行的独立评估
-- 不要使用基于轮次的措辞，如 `本轮`、`这轮`、`当前这轮` 或 `轮次`
+- 不要使用基于轮次的措辞，如 `本轮`、`这轮` 或 `轮次`
 - 避免交接式的开头；直接书写关于代码、行为、风险或结果的内容
 
 ## 输出标准
