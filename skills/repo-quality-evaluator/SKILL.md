@@ -156,8 +156,8 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 - 每个 `criterion.points` 保持 `5`
 - 每个 `criterion.weight` 保持 `1.0`
 - passrate 计算方式为：加权得分之和除以加权满分之和
-- passrate 交付目标为 `qwen < 0.7`，`opus > qwen`，且 `(opus - qwen) / qwen > 20%`
-- 在设置 score 时，必须确保最终 qwen passrate < 0.7，opus passrate > qwen passrate，且相对 gap > 20%
+- passrate 交付目标为 `qwen < 0.7`，`opus > qwen`，且 `(opus - qwen) / qwen > 20%`（**严格大于**，gap = 0.20 不算通过）
+- 在设置 score 后，必须用公式 `gap = (opus_passrate - qwen_passrate) / qwen_passrate` 计算相对差距，确认结果 **严格大于 0.20**；若 gap ≤ 0.20，必须调整 score 直到 gap > 0.20
 - `task_type` / `application_domain` / `programming_language` 是单选元数据字段
 - `task_type` 必须从 `E:\claudeCoding\dist\<仓库名>\prompt.txt` 中分析得出，不能凭空填写
 
@@ -250,7 +250,8 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 - 没有 rationale 引入属于另一个 criterion 的证据
 - 没有 criterion 将键选择、写入路径统一、旧数据兼容性、交互打磨和验证全部捆绑在一起
 - passrate 文本与文件中字面的分数总和匹配
-- 最终配对仍满足 `qwen < 0.7`、`claude > qwen` 且相对差距 `> 20%`
+- 验证 `gap = (opus_passrate - qwen_passrate) / qwen_passrate`，确认结果 **严格大于 0.20**（gap = 20% 不算通过，必须调整 score）
+- 最终配对仍满足 `qwen < 0.7`、`claude > qwen` 且相对差距 `> 20%`（严格大于）
 
 ## 配对评分规则
 
@@ -264,8 +265,12 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 4. 比较配对中同一 criterion 的 rationale 到分数的映射，而不仅仅是最终的数字排序
 5. 如果一次运行因各层冲突而评低分，另一次运行因各层一致但错误而评高分，在双方 rationale 中明确说明该区别，并确保锚点支持它
 6. 不要将配对中不同的 rationale 内容或不同的锚点本身视为缺陷；当观察到的行为不同时，配对运行可以合理地落在不同的锚点上，只要应用的是相同的 rubric 和相同的评分逻辑
-7. 检查最终配对是否满足交付目标
-8. 如果不满足，仅在证据范围内重新审视 rubric 的锐度和分数校准
+7. 计算 passrate 和 gap，执行数值验证：
+   - `qwen_passrate = Σ(qwen_scores) / (n × 5)`
+   - `opus_passrate = Σ(opus_scores) / (n × 5)`
+   - `gap = (opus_passrate - qwen_passrate) / qwen_passrate`
+   - 确认三项约束：`qwen_passrate < 0.7`、`opus_passrate > qwen_passrate`、`gap > 0.20`（**严格大于**，gap = 0.20 不算通过）
+8. 如果 gap ≤ 0.20，即使 gap = 0.20 也不算通过，必须在证据范围内重新审视 score 并调整，直到 gap 严格大于 0.20
 
 ### 双模型对齐强制检查
 
