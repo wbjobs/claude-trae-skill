@@ -52,6 +52,38 @@ E:\claudeCoding\
 
 仓库名是 `repos` 和 `dist` 下共用的文件夹名称。
 
+当使用多副本工作流时（如 `worktree.bat <repo-name> 4` 创建的多份 worktree），`dist` 下会出现带数字后缀的目录：
+
+```text
+E:\claudeCoding\
+  repos\
+    repo-1\
+    repo-2\
+  dist\
+    repo-1\
+      ...
+    repo-2\
+      ...
+    repo-1-1\
+      prompt.txt
+      qwen\
+        ...
+      opus\
+        ...
+    repo-1-2\
+      prompt.txt
+      qwen\
+        ...
+      opus\
+        ...
+    repo-1-3\
+      ...
+    repo-1-4\
+      ...
+```
+
+这种 `repo-name-N` 的目录是独立的评估目标，各自拥有自己的 `prompt.txt`、`qwen/`、`opus/` 等子目录。源仓库仍映射回 `repos\<repo-name>`（不带 `-N` 后缀）。
+
 `E:\claudeCoding\dist\<仓库名>\prompt.txt` 是标准的 prompt 文件。为向后兼容，仅当 `prompt.txt` 不存在时，`prompt.md` 可作为可接受的回退方案。
 
 ## 运行解析规则
@@ -63,6 +95,7 @@ E:\claudeCoding\
 - 仓库 + 变体，例如 `repo-1 qwen`
 - 一个 dist 运行目录，例如 `E:\claudeCoding\dist\repo-1\qwen`
 - 仅仓库名，但仅在 `E:\claudeCoding\dist\<仓库名>` 下恰好存在一个可运行的变体目录时
+- 仅基础仓库名（如 `w24`），自动展开为 `w24-1`、`w24-2`……等所有匹配的数字后缀目录，每个作为独立的评估目标
 
 如果用户只提供 `repo-1`，且 `qwen` 和 `opus` 都存在，不要将它们静默合并为一次评估。尽可能从上下文推断预期的变体；否则清楚地报告歧义。
 
@@ -71,6 +104,7 @@ E:\claudeCoding\
 对于目标运行 `<仓库名>/<变体>`，读取：
 
 - 源仓库：`E:\claudeCoding\repos\<仓库名>`
+  - 对于多副本后缀目录（如 `w24-1`），源仓库映射为 `E:\claudeCoding\repos\w24`（去掉 `-N` 后缀）
 - prompt：`E:\claudeCoding\dist\<仓库名>\prompt.txt`
 - patch：`E:\claudeCoding\dist\<仓库名>\<变体>\patch.diff`
 - trajectory：`E:\claudeCoding\dist\<仓库名>\<变体>\trajectory.jsonl`
@@ -294,6 +328,15 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 - 仓库名加变体，如 `repo-1 qwen`
 - 解析为 `E:\claudeCoding\dist\<仓库名>\<变体>` 的 dist 运行文件夹名
 - 仅仓库名如 `repo-1`，仅在恰好存在一个可运行的变体目录时
+
+**多副本自动展开**：当用户指定的仓库名（如 `w24`）在 `dist\` 下不存在精确匹配目录，但存在匹配 `w24-\d+` 模式的多个带数字后缀的目录时，应自动展开为多个评估目标逐一处理：
+
+- 扫描 `E:\claudeCoding\dist\` 查找所有匹配 `{仓库名}-\d+` 的目录
+- 对每个找到的目录（如 `w24-1`、`w24-2`、`w24-3`、`w24-4`）作为独立的评估目标
+- 各自的变体目录为 `E:\claudeCoding\dist\{仓库名}-{N}\<变体>`
+- 源仓库统一映射到 `E:\claudeCoding\repos\{仓库名}`（不带 `-N` 后缀）
+
+如果 `dist\` 下既存在精确匹配目录，又存在带数字后缀的目录（如存在 `dist\w24\` 和 `dist\w24-1\`），优先处理用户明确指定的名称；用户未明确时报告歧义。
 
 然后映射到：
 
