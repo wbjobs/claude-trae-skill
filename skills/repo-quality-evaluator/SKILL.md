@@ -171,6 +171,9 @@ E:\claudeCoding\
 - 必须**具体到文件或类名、方法名**，指出哪里没有实现好或哪里实现到位
 - **禁止**将原始错误信息、堆栈跟踪直接粘贴到 rationale 中
 - rationale 是对当前运行的独立评估，不要出现 `qwen` 或 `opus` 模型名
+- 对同一任务的配对 qwen / claude 评估，**禁止**把一边的 rationale 长文本交叉复制到另一边
+- 如果配对双方在同一 criterion 上都引用相近事实，也必须依据各自运行的 `patch.diff`、`trajectory.jsonl`、`proxy_events.jsonl`、`session.json` 独立落笔，不能只替换少量词语后复用整段表述
+- 在写入前，必须逐项比对配对双方的 rationale；如果同序 criterion 的 rationale 完全相同，或主体句群明显是同一段长文本改写不足，必须回到两边轨迹重新核对并重写
 
 ### badpattern 字段
 
@@ -283,6 +286,7 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 - 每个 rationale 在双方谈论相同的工程表面
 - 没有 rationale 引入属于另一个 criterion 的证据
 - 没有 criterion 将键选择、写入路径统一、旧数据兼容性、交互打磨和验证全部捆绑在一起
+- 配对双方同序 criterion 的 rationale 不能是同一段长文本的复制或弱改写；若发现文本高度重合，必须回查两边轨迹与 patch 证据后重写
 - passrate 文本与文件中字面的分数总和匹配
 - 验证 `gap = (opus_passrate - qwen_passrate) / qwen_passrate`，确认结果 **严格大于 0.20**（gap = 20% 不算通过，必须调整 score）
 - 最终配对仍满足 `qwen < 0.7`、`claude > qwen` 且相对差距 `> 20%`（严格大于）
@@ -299,12 +303,13 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 4. 比较配对中同一 criterion 的 rationale 到分数的映射，而不仅仅是最终的数字排序
 5. 如果一次运行因各层冲突而评低分，另一次运行因各层一致但错误而评高分，在双方 rationale 中明确说明该区别，并确保锚点支持它
 6. 不要将配对中不同的 rationale 内容或不同的锚点本身视为缺陷；当观察到的行为不同时，配对运行可以合理地落在不同的锚点上，只要应用的是相同的 rubric 和相同的评分逻辑
-7. 计算 passrate 和 gap，执行数值验证：
+7. 每个配对 criterion 的 rationale 都必须基于各自运行单独核对证据后独立书写，不能从另一边复制整段长文本，也不能在未重查两边轨迹前复用同一套句群
+8. 计算 passrate 和 gap，执行数值验证：
    - `qwen_passrate = Σ(qwen_scores) / (n × 5)`
    - `opus_passrate = Σ(opus_scores) / (n × 5)`
    - `gap = (opus_passrate - qwen_passrate) / qwen_passrate`
    - 确认三项约束：`qwen_passrate < 0.7`、`opus_passrate > qwen_passrate`、`gap > 0.20`（**严格大于**，gap = 0.20 不算通过）
-8. 如果 gap ≤ 0.20，即使 gap = 0.20 也不算通过，必须在证据范围内重新审视 score 并调整，直到 gap 严格大于 0.20
+9. 如果 gap ≤ 0.20，即使 gap = 0.20 也不算通过，必须在证据范围内重新审视 score 并调整，直到 gap 严格大于 0.20
 
 ### 双模型对齐强制检查
 
@@ -315,9 +320,8 @@ qwen 变体的 quality.toml 必须分析是否命中 Qwen BadPattern：
 - 每个 criterion 的 `description` 在两份文件中**逐字相同**
 - 每个 criterion 的 `type`、`points`、`weight` 在两份文件中**完全一致**
 - 仅 `score` 和 `rationale` 可以（且通常应该）不同
+- qwen / claude 同序 criterion 的 `rationale` 不能完全相同；若长文本高度相似，也视为未通过，必须回查双方轨迹与 patch 重新改写
 - qwen 变体必须包含 `badpattern` 字段（如果适用），opus 变体不需要
-
-
 
 ## 评估工作流
 
@@ -550,6 +554,7 @@ score = 3
 - 确保 `criterion.name` **使用中文**，不使用英文标识符，用简洁的中文短语命名
 - 确保 `criterion.description` 首句为 rubric 问题，紧跟 `1:锚点;2:锚点;3:锚点;4:锚点;5:锚点`
 - 确保 `criterion.rationale` 引用真实证据，具体到文件、类名或方法名，禁止粘贴原始错误信息
+- 确保配对双方同序 criterion 的 `rationale` 独立书写，不得出现完全相同的长文本，也不得在未核对双方轨迹前复用同一段主体句群
 - qwen 变体必须分析并填写 `badpattern` 字段（如适用），opus 变体不需要
 - 填写 `task_type`、`application_domain` 和 `programming_language`
 
@@ -572,8 +577,9 @@ score = 3
 4. **确认 opus 的 passrate > qwen 的 passrate**
 5. **计算 gap**：`gap = (opus_passrate - qwen_passrate) / qwen_passrate`
 6. **确认 gap > 0.2**（**严格大于**，0.20 不算通过）
+7. **逐项比较配对双方的 rationale**：若同序 criterion 的 rationale 完全相同，或长文本主体明显来自交叉复制，必须先回到双方轨迹与 patch 证据重写，再允许写入文件
 
-如果任何一项不满足，必须先调整 score 再写入，不能先写入再等用户指出问题。
+如果任何一项不满足，必须先调整 score 或 rationale 再写入，不能先写入再等用户指出问题。
 
 ## 输出标准
 
